@@ -102,15 +102,43 @@ func TestLinkedQueue(t *testing.T) {
 }
 
 func BenchmarkLinkedQueue(b *testing.B) {
+	iterations := int64(b.N)
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	writers := int64(5)
 	q := NewConcurrentLinkedQueue()
-	b.RunParallel(func(pb *testing.PB) { //并发
-		for pb.Next() {
-			q.Enqueue(time.Now().Unix())
-		}
-	})
-	b.RunParallel(func(pb *testing.PB) { //并发
-		for pb.Next() {
-			q.Dequeue()
-		}
-	})
+
+	for x := int64(0); x < writers; x++ {
+		go func() {
+			for i := int64(0); i < iterations; i++ {
+				q.Enqueue(i)
+			}
+		}()
+	}
+
+	for i := int64(0); i < iterations*writers; i++ {
+		q.Dequeue()
+	}
+}
+
+func BenchmarkChannel(b *testing.B) {
+	iterations := int64(b.N)
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	channel := make(chan int64, 100)
+	writers := int64(5)
+
+	for x := int64(0); x < writers; x++ {
+		go func() {
+			for i := int64(0); i < iterations; i++ {
+				channel <- i
+			}
+		}()
+	}
+
+	for i := int64(0); i < iterations*writers; i++ {
+		<-channel
+	}
 }
