@@ -127,7 +127,7 @@ func BenchmarkChannel(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	channel := make(chan int64, 100)
+	channel := make(chan int64, 10000)
 	writers := int64(5)
 
 	for x := int64(0); x < writers; x++ {
