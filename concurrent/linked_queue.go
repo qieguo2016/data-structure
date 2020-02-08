@@ -37,8 +37,6 @@ type ConcurrentLinkedQueue struct {
 	size int64
 }
 
-var expunged = unsafe.Pointer(new(interface{}))
-
 func NewConcurrentLinkedQueue() *ConcurrentLinkedQueue {
 	dummy := &ConcurrentLinkedQueueNode{}
 	dummy.Value = nil
@@ -82,16 +80,14 @@ func (queue *ConcurrentLinkedQueue) Enqueue(v interface{}) bool {
 	for {
 		tail := queue.loadTail()
 		next := tail.loadNext()
-		if tail == queue.loadTail() {
-			if next == nil {
-				if tail.casNext(next, newNode) {
-					queue.casTail(tail, newNode)
-					atomic.AddInt64(&queue.size, 1)
-					return true
-				}
-			} else {
-				queue.casTail(tail, next)
+		if next == nil {
+			if tail.casNext(next, newNode) {
+				queue.casTail(tail, newNode)
+				atomic.AddInt64(&queue.size, 1)
+				return true
 			}
+		} else {
+			queue.casTail(tail, next)
 		}
 	}
 }
@@ -101,16 +97,14 @@ func (queue *ConcurrentLinkedQueue) Dequeue() interface{} {
 		h := queue.loadHead()
 		t := queue.loadTail()
 		first := h.loadNext()
-		if h == queue.loadHead() {
-			if h == t {
-				if first == nil {
-					return nil
-				}
-				queue.casTail(t, first)
-			} else if queue.casHead(h, first) {
-				h.casNext(first, nil)
-				return first.Value
+		if h == t {
+			if first == nil {
+				return nil
 			}
+			queue.casTail(t, first)
+		} else if queue.casHead(h, first) {
+			h.casNext(first, nil)
+			return first.Value
 		}
 	}
 }

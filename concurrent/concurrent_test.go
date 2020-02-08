@@ -59,35 +59,45 @@ func TestAlternateOutput(t *testing.T) {
 func TestLinkedQueue(t *testing.T) {
 	num := runtime.NumCPU()
 	runtime.GOMAXPROCS(num)
-	c := make(chan interface{}, 10000)
+	c := make(chan []int, 10000)
 	q := NewConcurrentLinkedQueue()
-	n := 100 // 并发
-	m := 100 // 单个并发执行数量
+	n := 10 // 并发
+	m := 20 // 单个并发执行数量
 	for i := 0; i < n; i++ {
 		go func(j int) {
 			for k := 0; k < m; k++ {
-				q.Enqueue(fmt.Sprintf("%d_%d", j, k))
+				q.Enqueue([]int{j, k})
 			}
 		}(i)
 	}
 
 	for i := 0; i < n; i++ {
 		go func() {
-			for v := q.Dequeue(); v != nil; v = q.Dequeue() {
-				c <- v
+			v := q.Dequeue()
+			if v != nil {
+				c <- v.([]int)
 			}
 		}()
 	}
 
 	j := 0
+	ret := map[int][]int{}
 	for j < n*m {
-		<-c
-		// fmt.Printf("data: %s\n", n)
+		s := <-c
+		if len(s) > 0 {
+			if _, ok := ret[s[0]]; ok {
+				ret[s[0]] = append(ret[s[0]], s[1])
+			} else {
+				ret[s[0]] = []int{s[1]}
+			}
+		}
 		j++
 	}
 
-	fmt.Printf("j=%d\n", j)
 	fmt.Println("cup num=", num)
+	for k, v := range ret {
+		fmt.Println(k, v)
+	}
 	fmt.Println("==== end ====")
 }
 
