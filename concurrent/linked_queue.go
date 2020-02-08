@@ -25,6 +25,12 @@ func (node *ConcurrentLinkedQueueNode) casNext(oldV, newV *ConcurrentLinkedQueue
 	)
 }
 
+func (node *ConcurrentLinkedQueueNode) loadNext() *ConcurrentLinkedQueueNode {
+	return (*ConcurrentLinkedQueueNode)(atomic.LoadPointer(
+		(*unsafe.Pointer)(unsafe.Pointer(&node.Next)),
+	))
+}
+
 type ConcurrentLinkedQueue struct {
 	head *ConcurrentLinkedQueueNode
 	tail *ConcurrentLinkedQueueNode
@@ -59,12 +65,24 @@ func (queue *ConcurrentLinkedQueue) casHead(oldV, newV *ConcurrentLinkedQueueNod
 	)
 }
 
+func (queue *ConcurrentLinkedQueue) loadHead() *ConcurrentLinkedQueueNode {
+	return (*ConcurrentLinkedQueueNode)(atomic.LoadPointer(
+		(*unsafe.Pointer)(unsafe.Pointer(&queue.head)),
+	))
+}
+
+func (queue *ConcurrentLinkedQueue) loadTail() *ConcurrentLinkedQueueNode {
+	return (*ConcurrentLinkedQueueNode)(atomic.LoadPointer(
+		(*unsafe.Pointer)(unsafe.Pointer(&queue.tail)),
+	))
+}
+
 func (queue *ConcurrentLinkedQueue) Enqueue(v interface{}) bool {
 	newNode := &ConcurrentLinkedQueueNode{Value: v, Next: nil}
 	for {
-		tail := queue.tail
-		next := tail.Next
-		if tail == queue.tail {
+		tail := queue.loadTail()
+		next := tail.loadNext()
+		if tail == queue.loadTail() {
 			if next == nil {
 				if tail.casNext(next, newNode) {
 					queue.casTail(tail, newNode)
@@ -80,10 +98,10 @@ func (queue *ConcurrentLinkedQueue) Enqueue(v interface{}) bool {
 
 func (queue *ConcurrentLinkedQueue) Dequeue() interface{} {
 	for {
-		h := queue.head
-		t := queue.tail
-		first := h.Next
-		if h == queue.head {
+		h := queue.loadHead()
+		t := queue.loadTail()
+		first := h.loadNext()
+		if h == queue.loadHead() {
 			if h == t {
 				if first == nil {
 					return nil

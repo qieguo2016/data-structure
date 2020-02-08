@@ -59,10 +59,10 @@ func TestAlternateOutput(t *testing.T) {
 func TestLinkedQueue(t *testing.T) {
 	num := runtime.NumCPU()
 	runtime.GOMAXPROCS(num)
-	c := make(chan interface{}, 1000)
+	c := make(chan interface{}, 10000)
 	q := NewConcurrentLinkedQueue()
-	n := 10   // 并发
-	m := 1000 // 总量
+	n := 100 // 并发
+	m := 100 // 单个并发执行数量
 	for i := 0; i < n; i++ {
 		go func(j int) {
 			for k := 0; k < m; k++ {
@@ -81,8 +81,8 @@ func TestLinkedQueue(t *testing.T) {
 
 	j := 0
 	for j < n*m {
-		n := <-c
-		fmt.Printf("data: %s\n", n)
+		<-c
+		// fmt.Printf("data: %s\n", n)
 		j++
 	}
 
