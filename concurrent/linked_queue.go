@@ -1,3 +1,10 @@
+/*
+	lock free linked queue.
+	ref:
+		1. http://ddrv.cn/a/591069
+		2. https://coolshell.cn/articles/8239.html
+*/
+
 package concurrent
 
 import (
@@ -5,13 +12,6 @@ import (
 	"sync/atomic"
 	"unsafe"
 )
-
-/*
-	lock free linked queue.
-	ref:
-		1. http://ddrv.cn/a/591069
-		2. https://coolshell.cn/articles/8239.html
-*/
 
 type LinkedQueueNode struct {
 	Value interface{}

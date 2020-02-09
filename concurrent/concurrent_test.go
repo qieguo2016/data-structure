@@ -177,10 +177,55 @@ func TestCacheLine(t *testing.T) {
 	fmt.Println(sum)
 }
 
-func TestMod(t *testing.T) {
-	cap := int64(16)
-	indexMark := cap - int64(1)
-	for i := int64(0); i < 1000; i++ {
-		fmt.Println(i, i & indexMark)
+func TestArrayQueue(t *testing.T) {
+	num := runtime.NumCPU()
+	runtime.GOMAXPROCS(num)
+
+	//wg := sync.WaitGroup{}
+	c := make(chan []int, 1000)
+	q := NewArrayQueue()
+	concurrency := 10 // 并发
+	iterations := 20 // 单个并发执行数量
+
+	//wg.Add(concurrency)
+	for n := 0; n < concurrency; n++ {
+		go func(n int) {
+			for i := 0; i < iterations; i++ {
+				q.Enqueue([]int{n, i})
+				//q.EnqueueWithLock(i)
+			}
+			//wg.Done()
+		}(n)
 	}
+
+	//wg.Add(concurrency)
+	for n := 0; n < concurrency; n++ {
+		go func() {
+			i := 0
+			for i < iterations {
+				if v := q.Dequeue(); v != nil {
+					//if q.DequeueWithLock() != nil {
+					c <- v.([]int)
+					i++
+				}
+			}
+			//wg.Done()
+		}()
+	}
+	//wg.Wait()
+
+	ret := map[int][]int{}
+	for i := 0; i < concurrency * iterations ; i++ {
+		val := <- c
+		if _, ok := ret[val[0]]; ok {
+			ret[val[0]] = append(ret[val[0]], val[1])
+		} else {
+			ret[val[0]] = []int{val[1]}
+		}
+	}
+
+	for k := range ret {
+		fmt.Println(k, ret[k])
+	}
+	fmt.Println("==== end ====")
 }
