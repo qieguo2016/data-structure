@@ -1,6 +1,7 @@
 package concurrent
 
 import (
+	"sync"
 	"sync/atomic"
 	"unsafe"
 )
@@ -35,6 +36,7 @@ type ConcurrentLinkedQueue struct {
 	head *ConcurrentLinkedQueueNode
 	tail *ConcurrentLinkedQueueNode
 	size int64
+	m    sync.Mutex
 }
 
 func NewConcurrentLinkedQueue() *ConcurrentLinkedQueue {
@@ -77,34 +79,79 @@ func (queue *ConcurrentLinkedQueue) loadTail() *ConcurrentLinkedQueueNode {
 
 func (queue *ConcurrentLinkedQueue) Enqueue(v interface{}) bool {
 	newNode := &ConcurrentLinkedQueueNode{Value: v, Next: nil}
+	var tail, next *ConcurrentLinkedQueueNode
 	for {
-		tail := queue.loadTail()
-		next := tail.loadNext()
-		if next == nil {
-			if tail.casNext(next, newNode) {
-				queue.casTail(tail, newNode)
-				atomic.AddInt64(&queue.size, 1)
-				return true
+		// use atomic load and cas
+		tail = queue.loadTail()
+		next = tail.loadNext()
+		if tail == queue.loadTail() { // double check
+			if next == nil { // queue tail
+				if tail.casNext(next, newNode) { // link to queue
+					break
+				}
+			} else {
+				queue.casTail(tail, next) // move tail pointer to real tail
 			}
-		} else {
-			queue.casTail(tail, next)
 		}
 	}
+
+	queue.casTail(tail, newNode) // failure is ok, another thread has update
+	atomic.AddInt64(&queue.size, 1)
+	return true
 }
 
 func (queue *ConcurrentLinkedQueue) Dequeue() interface{} {
+	var head, tail, first *ConcurrentLinkedQueueNode
 	for {
-		h := queue.loadHead()
-		t := queue.loadTail()
-		first := h.loadNext()
-		if h == t {
-			if first == nil {
+		// use atomic load and cas
+		head = queue.loadHead()  // dummy
+		tail = queue.loadTail()  // dummy
+		first = head.loadNext()  // nil
+		if head == queue.loadHead() { // double check
+			if first == nil { // empty list
 				return nil
 			}
-			queue.casTail(t, first)
-		} else if queue.casHead(h, first) {
-			h.casNext(first, nil)
-			return first.Value
+			if head == tail { // empty list
+				queue.casTail(tail, first) // move tail to real pointer
+				continue
+			}
+			if queue.casHead(head, first) {
+				break
+			}
 		}
 	}
+
+	atomic.AddInt64(&queue.size, -1)
+	return first.Value
+}
+
+func (queue *ConcurrentLinkedQueue) Size() int64 {
+	return atomic.LoadInt64(&queue.size)
+}
+
+func (queue *ConcurrentLinkedQueue) EnqueueLock(v interface{}) bool {
+	newNode := &ConcurrentLinkedQueueNode{Value: v, Next: nil}
+	queue.m.Lock()
+	defer queue.m.Unlock()
+	tail := queue.tail
+	tail.Next = newNode
+	queue.tail = newNode
+	queue.size += 1
+	return true
+}
+
+func (queue *ConcurrentLinkedQueue) DequeueLock() interface{} {
+	var head, tail, first *ConcurrentLinkedQueueNode
+	queue.m.Lock()
+	defer queue.m.Unlock()
+	head = queue.head
+	tail = queue.tail
+	first = head.Next
+	if head == tail {
+		return nil
+	}
+	queue.head = first
+	head.Next = nil
+	queue.size -= 1
+	return first.Value
 }

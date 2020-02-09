@@ -3,7 +3,7 @@ package concurrent
 import (
 	"fmt"
 	"runtime"
-
+	"sync"
 	"testing"
 	"time"
 )
@@ -102,24 +102,38 @@ func TestLinkedQueue(t *testing.T) {
 }
 
 func BenchmarkLinkedQueue(b *testing.B) {
-	iterations := int64(b.N)
+	concurrency := 10
+	q := NewConcurrentLinkedQueue()
+	wg := sync.WaitGroup{}
+	iterations := b.N
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	writers := int64(5)
-	q := NewConcurrentLinkedQueue()
-
-	for x := int64(0); x < writers; x++ {
+	wg.Add(concurrency)
+	for x := 0; x < concurrency; x++ {
 		go func() {
-			for i := int64(0); i < iterations; i++ {
-				q.Enqueue(i)
+			for i := 0; i < iterations; i++ {
+				//q.Enqueue(i)
+				q.EnqueueLock(i)
 			}
+			wg.Done()
 		}()
 	}
 
-	for i := int64(0); i < iterations*writers; i++ {
-		q.Dequeue()
+	wg.Add(concurrency)
+	for x := 0; x < concurrency; x++ {
+		go func() {
+			i := 0
+			for i < iterations {
+				//if q.Dequeue() != nil {
+				if q.DequeueLock() != nil {
+					i++
+				}
+			}
+			wg.Done()
+		}()
 	}
+	wg.Wait()
 }
 
 func BenchmarkChannel(b *testing.B) {
