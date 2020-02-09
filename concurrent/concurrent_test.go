@@ -59,45 +59,37 @@ func TestAlternateOutput(t *testing.T) {
 func TestLinkedQueue(t *testing.T) {
 	num := runtime.NumCPU()
 	runtime.GOMAXPROCS(num)
-	c := make(chan []int, 10000)
+	wg := sync.WaitGroup{}
 	q := NewLinkedQueue()
-	n := 10 // 并发
-	m := 20 // 单个并发执行数量
-	for i := 0; i < n; i++ {
-		go func(j int) {
-			for k := 0; k < m; k++ {
-				q.Enqueue([]int{j, k})
-			}
-		}(i)
-	}
-
-	for i := 0; i < n; i++ {
+	concurrency := 10 // 并发
+	iterations := 200 // 单个并发执行数量
+	wg.Add(concurrency)
+	for x := 0; x < concurrency; x++ {
 		go func() {
-			v := q.Dequeue()
-			if v != nil {
-				c <- v.([]int)
+			for i := 0; i < iterations; i++ {
+				q.Enqueue(i)
+				//q.EnqueueWithLock(i)
 			}
+			wg.Done()
 		}()
 	}
 
-	j := 0
-	ret := map[int][]int{}
-	for j < n*m {
-		s := <-c
-		if len(s) > 0 {
-			if _, ok := ret[s[0]]; ok {
-				ret[s[0]] = append(ret[s[0]], s[1])
-			} else {
-				ret[s[0]] = []int{s[1]}
+	wg.Add(concurrency)
+	for x := 0; x < concurrency; x++ {
+		go func() {
+			i := 0
+			for i < iterations {
+				if q.Dequeue() != nil {
+				//if q.DequeueWithLock() != nil {
+					i++
+				}
 			}
-		}
-		j++
+			wg.Done()
+		}()
 	}
+	wg.Wait()
 
 	fmt.Println("cup num=", num)
-	for k, v := range ret {
-		fmt.Println(k, v)
-	}
 	fmt.Println("==== end ====")
 }
 
