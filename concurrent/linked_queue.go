@@ -13,12 +13,12 @@ import (
 		2. https://coolshell.cn/articles/8239.html
 */
 
-type ConcurrentLinkedQueueNode struct {
+type LinkedQueueNode struct {
 	Value interface{}
-	Next  *ConcurrentLinkedQueueNode
+	Next  *LinkedQueueNode
 }
 
-func (node *ConcurrentLinkedQueueNode) casNext(oldV, newV *ConcurrentLinkedQueueNode) bool {
+func (node *LinkedQueueNode) casNext(oldV, newV *LinkedQueueNode) bool {
 	return atomic.CompareAndSwapPointer(
 		(*unsafe.Pointer)(unsafe.Pointer(&node.Next)),
 		unsafe.Pointer(oldV),
@@ -26,30 +26,30 @@ func (node *ConcurrentLinkedQueueNode) casNext(oldV, newV *ConcurrentLinkedQueue
 	)
 }
 
-func (node *ConcurrentLinkedQueueNode) loadNext() *ConcurrentLinkedQueueNode {
-	return (*ConcurrentLinkedQueueNode)(atomic.LoadPointer(
+func (node *LinkedQueueNode) loadNext() *LinkedQueueNode {
+	return (*LinkedQueueNode)(atomic.LoadPointer(
 		(*unsafe.Pointer)(unsafe.Pointer(&node.Next)),
 	))
 }
 
-type ConcurrentLinkedQueue struct {
-	head *ConcurrentLinkedQueueNode
-	tail *ConcurrentLinkedQueueNode
+type LinkedQueue struct {
+	head *LinkedQueueNode
+	tail *LinkedQueueNode
 	size int64
 	m    sync.Mutex
 }
 
-func NewConcurrentLinkedQueue() *ConcurrentLinkedQueue {
-	dummy := &ConcurrentLinkedQueueNode{}
+func NewLinkedQueue() *LinkedQueue {
+	dummy := &LinkedQueueNode{}
 	dummy.Value = nil
 	dummy.Next = nil
-	return &ConcurrentLinkedQueue{ // like container/list, use same node
+	return &LinkedQueue{ // like container/list, use same node
 		head: dummy,
 		tail: dummy,
 	}
 }
 
-func (queue *ConcurrentLinkedQueue) casTail(oldV, newV *ConcurrentLinkedQueueNode) bool {
+func (queue *LinkedQueue) casTail(oldV, newV *LinkedQueueNode) bool {
 	return atomic.CompareAndSwapPointer(
 		(*unsafe.Pointer)(unsafe.Pointer(&queue.tail)),
 		unsafe.Pointer(oldV),
@@ -57,7 +57,7 @@ func (queue *ConcurrentLinkedQueue) casTail(oldV, newV *ConcurrentLinkedQueueNod
 	)
 }
 
-func (queue *ConcurrentLinkedQueue) casHead(oldV, newV *ConcurrentLinkedQueueNode) bool {
+func (queue *LinkedQueue) casHead(oldV, newV *LinkedQueueNode) bool {
 	return atomic.CompareAndSwapPointer(
 		(*unsafe.Pointer)(unsafe.Pointer(&queue.head)),
 		unsafe.Pointer(oldV),
@@ -65,21 +65,21 @@ func (queue *ConcurrentLinkedQueue) casHead(oldV, newV *ConcurrentLinkedQueueNod
 	)
 }
 
-func (queue *ConcurrentLinkedQueue) loadHead() *ConcurrentLinkedQueueNode {
-	return (*ConcurrentLinkedQueueNode)(atomic.LoadPointer(
+func (queue *LinkedQueue) loadHead() *LinkedQueueNode {
+	return (*LinkedQueueNode)(atomic.LoadPointer(
 		(*unsafe.Pointer)(unsafe.Pointer(&queue.head)),
 	))
 }
 
-func (queue *ConcurrentLinkedQueue) loadTail() *ConcurrentLinkedQueueNode {
-	return (*ConcurrentLinkedQueueNode)(atomic.LoadPointer(
+func (queue *LinkedQueue) loadTail() *LinkedQueueNode {
+	return (*LinkedQueueNode)(atomic.LoadPointer(
 		(*unsafe.Pointer)(unsafe.Pointer(&queue.tail)),
 	))
 }
 
-func (queue *ConcurrentLinkedQueue) Enqueue(v interface{}) bool {
-	newNode := &ConcurrentLinkedQueueNode{Value: v, Next: nil}
-	var tail, next *ConcurrentLinkedQueueNode
+func (queue *LinkedQueue) Enqueue(v interface{}) bool {
+	newNode := &LinkedQueueNode{Value: v, Next: nil}
+	var tail, next *LinkedQueueNode
 	for {
 		// use atomic load and cas
 		tail = queue.loadTail()
@@ -100,8 +100,8 @@ func (queue *ConcurrentLinkedQueue) Enqueue(v interface{}) bool {
 	return true
 }
 
-func (queue *ConcurrentLinkedQueue) Dequeue() interface{} {
-	var head, tail, first *ConcurrentLinkedQueueNode
+func (queue *LinkedQueue) Dequeue() interface{} {
+	var head, tail, first *LinkedQueueNode
 	for {
 		// use atomic load and cas
 		head = queue.loadHead()  // dummy
@@ -125,12 +125,12 @@ func (queue *ConcurrentLinkedQueue) Dequeue() interface{} {
 	return first.Value
 }
 
-func (queue *ConcurrentLinkedQueue) Size() int64 {
+func (queue *LinkedQueue) Size() int64 {
 	return atomic.LoadInt64(&queue.size)
 }
 
-func (queue *ConcurrentLinkedQueue) EnqueueLock(v interface{}) bool {
-	newNode := &ConcurrentLinkedQueueNode{Value: v, Next: nil}
+func (queue *LinkedQueue) EnqueueWithLock(v interface{}) bool {
+	newNode := &LinkedQueueNode{Value: v, Next: nil}
 	queue.m.Lock()
 	defer queue.m.Unlock()
 	tail := queue.tail
@@ -140,8 +140,8 @@ func (queue *ConcurrentLinkedQueue) EnqueueLock(v interface{}) bool {
 	return true
 }
 
-func (queue *ConcurrentLinkedQueue) DequeueLock() interface{} {
-	var head, tail, first *ConcurrentLinkedQueueNode
+func (queue *LinkedQueue) DequeueWithLock() interface{} {
+	var head, tail, first *LinkedQueueNode
 	queue.m.Lock()
 	defer queue.m.Unlock()
 	head = queue.head

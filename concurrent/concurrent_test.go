@@ -60,7 +60,7 @@ func TestLinkedQueue(t *testing.T) {
 	num := runtime.NumCPU()
 	runtime.GOMAXPROCS(num)
 	c := make(chan []int, 10000)
-	q := NewConcurrentLinkedQueue()
+	q := NewLinkedQueue()
 	n := 10 // 并发
 	m := 20 // 单个并发执行数量
 	for i := 0; i < n; i++ {
@@ -103,7 +103,7 @@ func TestLinkedQueue(t *testing.T) {
 
 func BenchmarkLinkedQueue(b *testing.B) {
 	concurrency := 10
-	q := NewConcurrentLinkedQueue()
+	q := NewLinkedQueue()
 	wg := sync.WaitGroup{}
 	iterations := b.N
 	b.ReportAllocs()
@@ -114,7 +114,7 @@ func BenchmarkLinkedQueue(b *testing.B) {
 		go func() {
 			for i := 0; i < iterations; i++ {
 				//q.Enqueue(i)
-				q.EnqueueLock(i)
+				q.EnqueueWithLock(i)
 			}
 			wg.Done()
 		}()
@@ -126,7 +126,7 @@ func BenchmarkLinkedQueue(b *testing.B) {
 			i := 0
 			for i < iterations {
 				//if q.Dequeue() != nil {
-				if q.DequeueLock() != nil {
+				if q.DequeueWithLock() != nil {
 					i++
 				}
 			}
@@ -154,5 +154,41 @@ func BenchmarkChannel(b *testing.B) {
 
 	for i := int64(0); i < iterations*writers; i++ {
 		<-channel
+	}
+}
+
+func TestCacheLine(t *testing.T) {
+	arr := [1024 * 1024][8]int64{}
+	for i := 0; i < 1024*1024; i++ {
+		for j := 0; j < 8; j++ {
+			arr[i][j] = int64(1)
+		}
+	}
+
+	sum := int64(0)
+	t1 := time.Now()
+	for i := 0; i < 1024*1024; i++ {
+		tmp := arr[i]
+		for j := 0; j < 8; j++ {
+			sum = tmp[j]
+		}
+	}
+	fmt.Println("1 cost", time.Since(t1))
+
+	t2 := time.Now()
+	for i := 0; i < 8; i++ {
+		for j := 0; j < 1024*1024; j++ {
+			sum = arr[j][i]
+		}
+	}
+	fmt.Println("2 cost", time.Since(t2))
+	fmt.Println(sum)
+}
+
+func TestMod(t *testing.T) {
+	cap := int64(16)
+	indexMark := cap - int64(1)
+	for i := int64(0); i < 1000; i++ {
+		fmt.Println(i, i & indexMark)
 	}
 }
